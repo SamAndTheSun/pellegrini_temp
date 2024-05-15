@@ -54,17 +54,25 @@ def train_ae(X_train, batch_size, epochs):
   n_inputs = X_train.shape[1]
 
   X_train = X_train.values
+
+  #add noise to X_train so the model learns to detect noise
+  noise = np.random.normal(1, 0.5, X_train.shape) 
+  noisy_X_train = X_train + noise
+
   X_train = torch.tensor(X_train, dtype=torch.float32)
+  noisy_X_train = torch.tensor(X_train, dtype=torch.float32)
 
   criterion = nn.MSELoss()
-  dataset = TensorDataset(X_train, X_train)
+  dataset = TensorDataset(noisy_X_train, X_train)
   dataloader = DataLoader(dataset, batch_size=batch_size)
+
+  
 
   model = AutoEncoder(n_inputs)
   model.train()
   optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-  best_loss = 1
+  best_loss = 100
   for i in range(epochs):
     for inputs, targets in dataloader:
 
@@ -75,7 +83,7 @@ def train_ae(X_train, batch_size, epochs):
       loss.backward()
       optimizer.step()
 
-    if i % 10 == 0:
+    if i % 20 == 0:
       print(f'Epoch: {i} and loss: {loss}')
 
     if loss < best_loss:
@@ -112,7 +120,6 @@ def test_ae(model, X_test):
 
   denoised_data = torch.tensor(np.stack(denoised_data, axis=1), dtype=torch.float32)
   return denoised_data, trait_loss
-
 
 def time_to_death_grouped(data, category):
     '''
@@ -239,8 +246,8 @@ def train_nn(X_train, y_train, batch_size, epochs):
           optimizer.zero_grad()
           loss.backward()
           optimizer.step()
-        # print every 10 epochs
-        if i % 10 == 0:
+        # print every 20 epochs
+        if i % 20 == 0:
           print(f'Epoch: {i} and loss: {loss}')
           if loss >= last_loss and loss >= 50:
             print('\nAberrant training detected, retrying iteration\n')
