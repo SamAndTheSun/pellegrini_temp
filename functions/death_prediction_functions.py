@@ -37,21 +37,68 @@ class AutoEncoder(nn.Module):
   def encode(self, x):
     x = F.relu(self.fc1(x)) #takes the input then modifies it
     x = self.out(x) #gives the output prediction
+    return x
 
   def decode(self, x):
     x = F.relu(self.out_r(x)) #takes the output then modifies it
-    x = self.fc1a(x) #gives the input prediction
+    x = self.fc1_r(x) #gives the input prediction
+    return x
 
   def forward(self, x):
     x = self.encode(x)
     x = self.decode(x)
-
     return x
   
-def train_ae(X_train, y_train, batch_size, epochs):
-  #develop this
-  return
-   
+def train_ae(X_train, batch_size, epochs):
+  trait_names = X_train.columns
+  n_inputs = X_train.shape[1]
+
+  X_train = X_train.values
+  X_train = torch.tensor(X_train, dtype=torch.float32)
+
+  criterion = nn.MSELoss()
+  dataset = TensorDataset(X_train, X_train)
+  dataloader = DataLoader(dataset, batch_size=batch_size)
+
+  model = AutoEncoder(n_inputs)
+  model.train()
+  optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+  best_loss = 1
+  for i in range(epochs):
+    for inputs, targets in dataloader:
+
+      outputs = model(inputs)
+      loss = criterion(outputs, targets)
+
+      optimizer.zero_grad()
+      loss.backward()
+      optimizer.step()
+
+    if i % 10 == 0:
+      print(f'Epoch: {i} and loss: {loss}')
+
+    if loss < best_loss:
+      best_loss = loss
+      best_model = copy.deepcopy(model)
+
+  #now, utilize the trained model to predict the values
+  model.eval()
+
+  criterion = nn.MSELoss()
+  dataset = TensorDataset(X_train, X_train)
+  dataloader = DataLoader(dataset, batch_size=batch_size)
+
+  trait_loss = {}
+  with torch.no_grad():
+      for inputs, targets in dataloader:
+          outputs = best_model(inputs)
+          for output, input, trait in zip(outputs, inputs, trait_names):
+            loss = criterion(output, input)
+            trait_loss[trait] = float(loss)
+
+  return trait_loss
+
 
 def time_to_death_grouped(data, category):
     '''
