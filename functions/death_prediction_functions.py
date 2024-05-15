@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 import copy
 import pandas as pd
+import numpy as np
 
 '''
 Functions utilized in the death prediction model
@@ -50,7 +51,6 @@ class AutoEncoder(nn.Module):
     return x
   
 def train_ae(X_train, batch_size, epochs):
-  trait_names = X_train.columns
   n_inputs = X_train.shape[1]
 
   X_train = X_train.values
@@ -83,21 +83,35 @@ def train_ae(X_train, batch_size, epochs):
       best_model = copy.deepcopy(model)
 
   #now, utilize the trained model to predict the values
+      
+  return best_model
+
+def test_ae(model, X_test):
+
+  trait_names = X_test.columns
+
+  X_test = X_test.values
+  X_test = torch.tensor(X_test, dtype=torch.float32)
   model.eval()
 
   criterion = nn.MSELoss()
-  dataset = TensorDataset(X_train, X_train)
-  dataloader = DataLoader(dataset, batch_size=batch_size)
+  dataset = TensorDataset(X_test, X_test)
+  dataloader = DataLoader(dataset)
 
   trait_loss = {}
+  denoised_data = []
+
   with torch.no_grad():
       for inputs, targets in dataloader:
-          outputs = best_model(inputs)
+          outputs = model(inputs)
           for output, input, trait in zip(outputs, inputs, trait_names):
             loss = criterion(output, input)
             trait_loss[trait] = float(loss)
 
-  return trait_loss
+          denoised_data.append(outputs.squeeze().detach().numpy())
+
+  denoised_data = torch.tensor(np.stack(denoised_data, axis=1), dtype=torch.float32)
+  return denoised_data, trait_loss
 
 
 def time_to_death_grouped(data, category):
