@@ -23,6 +23,36 @@ class Model(nn.Module):
 
     return x
 
+class AutoEncoder(nn.Module):
+  def __init__(self, n_inputs=9, h1=6, out_features=3):
+    super().__init__()
+    #encoding functions
+    self.fc1 = nn.Linear(n_inputs, h1)
+    self.out = nn.Linear(h1, out_features)
+
+    #decoding functions
+    self.out_r = nn.Linear(out_features, h1)
+    self.fc1_r = nn.Linear(h1, n_inputs)
+
+  def encode(self, x):
+    x = F.relu(self.fc1(x)) #takes the input then modifies it
+    x = self.out(x) #gives the output prediction
+
+  def decode(self, x):
+    x = F.relu(self.out_r(x)) #takes the output then modifies it
+    x = self.fc1a(x) #gives the input prediction
+
+  def forward(self, x):
+    x = self.encode(x)
+    x = self.decode(x)
+
+    return x
+  
+def train_ae(X_train, y_train, batch_size, epochs):
+  #develop this
+  return
+   
+
 def time_to_death_grouped(data, category):
     '''
     groups predicted time until death value by selected category
@@ -233,3 +263,4 @@ def generate_nn_pred(model, X):
   outputs = outputs.detach().numpy() 
 
   return outputs
+
