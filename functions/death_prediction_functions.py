@@ -5,6 +5,8 @@ from torch.utils.data import DataLoader, TensorDataset
 import copy
 import pandas as pd
 import numpy as np
+from ipywidgets import IntProgress
+from IPython.display import display
 
 '''
 Functions utilized in the death prediction model
@@ -58,6 +60,9 @@ def cross_validation(X_all, y_all, epochs, batch_size, n_iterations):
     all_actual = []
     all_losses = []
 
+    progress_bar = IntProgress(min=0, max=n_iterations, description=f'Training')
+    display(progress_bar)
+
     n = 0
     while n < n_iterations:
 
@@ -77,9 +82,7 @@ def cross_validation(X_all, y_all, epochs, batch_size, n_iterations):
         y_train_2 = y_all[end:]
         y_train = pd.concat([y_train_1, y_train_2], axis=0, ignore_index=True)
 
-        print(f'\nIteration {n}: \n')
-
-        model = train_nn(X_train, y_train, epochs, batch_size)
+        model = train_nn(X_train, y_train, epochs, batch_size, bar=False)
         losses, approx, actual = test_nn(model, X_val, y_val)
 
         for a in approx:
@@ -101,9 +104,12 @@ def cross_validation(X_all, y_all, epochs, batch_size, n_iterations):
                 all_losses.append(l)
 
         n+=1
+
+        progress_bar.value = n
+
     return all_approx, all_actual, all_losses
 
-def train_nn(X_train, y_train, batch_size, epochs):
+def train_nn(X_train, y_train, batch_size, epochs, bar=False):
   '''
   trains neural network model
 
@@ -129,7 +135,7 @@ def train_nn(X_train, y_train, batch_size, epochs):
   dataloader = DataLoader(dataset, batch_size=batch_size)
     
   while True:
-    
+
     model = Model(n_inputs)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     model.train()
@@ -138,9 +144,13 @@ def train_nn(X_train, y_train, batch_size, epochs):
     best_loss = last_loss
     bad_iter = False
 
-    for i in range(epochs):
+    if bar:
+      progress_bar = IntProgress(min=0, max=epochs, description='Training')
+      display(progress_bar)
 
+    for i in range(epochs):
       try:
+
         for inputs, targets in dataloader:
 
           outputs = model(inputs)
@@ -149,18 +159,21 @@ def train_nn(X_train, y_train, batch_size, epochs):
           optimizer.zero_grad()
           loss.backward()
           optimizer.step()
+
         # print every 20 epochs
-        if i % 20 == 0:
-          print(f'Epoch: {i} and loss: {loss}')
+        if (i % 20) == 0:
           if loss >= last_loss and loss >= 50:
             print('\nAberrant training detected, retrying iteration\n')
+            progress_bar.value = 0
             raise Exception
+
         
         last_loss = loss
-
         if loss < best_loss:
            best_loss = loss
            best_model = copy.deepcopy(model)
+
+        if bar: progress_bar.value = epochs+1
 
       except:
         bad_iter = True 
@@ -235,3 +248,93 @@ def generate_nn_pred(model, X):
 
   return outputs
 
+class AutoEncoder(nn.Module):
+  def __init__(self, n_inputs=9, h1=6, out_features=3):
+    super().__init__()
+    #encoding functions
+    self.fc1 = nn.Linear(n_inputs, h1)
+    self.out = nn.Linear(h1, out_features)
+
+    #decoding functions
+    self.out_r = nn.Linear(out_features, h1)
+    self.fc1_r = nn.Linear(h1, n_inputs)
+
+  def encode(self, x):
+    x = F.relu(self.fc1(x)) #takes the input then modifies it
+    x = self.out(x) #gives the output prediction
+    return x
+
+  def decode(self, x):
+    x = F.relu(self.out_r(x)) #takes the output then modifies it
+    x = self.fc1_r(x) #gives the input prediction
+    return x
+
+  def forward(self, x):
+    x = self.encode(x)
+    x = self.decode(x)
+    return x
+  
+def train_ae(X_train, h1=6, out_features=3, batch_size=64, epochs=80):
+  n_inputs = X_train.shape[1]
+
+  try: X_train = X_train.values
+  except: pass
+
+  #add noise to X_train so the model learns to detect noise
+  noise = np.random.normal(1, 0.3, X_train.shape) 
+  noisy_X_train = X_train + noise
+
+  X_train = torch.tensor(X_train, dtype=torch.float32)
+  noisy_X_train = X_train.clone().detach()
+
+  criterion = nn.MSELoss()
+  dataset = TensorDataset(noisy_X_train, X_train)
+  dataloader = DataLoader(dataset, batch_size=batch_size)
+
+  model = AutoEncoder(n_inputs, h1=6, out_features=3)
+  model.train()
+  optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+  best_loss = 100
+  for i in range(epochs):
+    for inputs, targets in dataloader:
+
+      outputs = model(inputs)
+      loss = criterion(outputs, targets)
+
+      optimizer.zero_grad()
+      loss.backward()
+      optimizer.step()
+
+    if i % 10 == 0:
+      print(f'Epoch: {i} and loss: {loss}')
+
+    if loss < best_loss:
+      best_loss = loss
+      best_model = copy.deepcopy(model)
+
+  #now, utilize the trained model to predict the values
+      
+  return best_model
+
+def test_ae(model, X_test):
+
+  try: X_test = X_test.values
+  except: pass
+
+  X_test = torch.tensor(X_test, dtype=torch.float32)
+  model.eval()
+
+  dataset = TensorDataset(X_test, X_test)
+  dataloader = DataLoader(dataset)
+
+  denoised_data = []
+
+  with torch.no_grad():
+      for inputs, temp in dataloader:
+          outputs = model(inputs)
+          denoised_data.append(outputs.squeeze().detach().numpy())
+
+  denoised_data = torch.tensor(np.stack(denoised_data, axis=1), dtype=torch.float32)
+
+  return denoised_data
