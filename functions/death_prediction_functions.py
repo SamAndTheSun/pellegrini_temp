@@ -25,6 +25,16 @@ class Model(nn.Module):
     x = self.out(x)
 
     return x
+  
+  '''
+  Things I've tried to improve the model which have not worked:
+
+    Batch normalization
+    Dropout
+    Autoencoder for noise reduction
+
+  Likely, these don't work due to not having much data
+  '''
 
 def time_to_death_grouped(data, category):
     '''
