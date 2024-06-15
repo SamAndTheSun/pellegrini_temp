@@ -33,7 +33,7 @@ class Model(nn.Module):
     Dropout
     Autoencoder for noise reduction
 
-  Likely, these don't work due to not having much data
+  Likely, these don't work due to not having much data and due to the complexity of the problem involved
   '''
 
 def time_to_death_grouped(data, category):
