@@ -24,15 +24,19 @@ def quality_filter(data, filter):
 
         return: filtered data, df
     '''
+
+    data = data[::-1]
+
     index = data.index
     data = data.values #decreases runtime
 
-    keep_val = ['Rank', 'CD1 or C57BL6J?', 'C57BL6J or Sv129Ev?'] #special case handling
+    keep_val = ['Rank', 'CD1 or C57BL6J?', 'C57BL6J or Sv129Ev?', 'M10_poststress_GLU'] #special case handling
 
-    length = len(data)
+    length = len(data)-1
     n = 0
     while n < length:
         m = 0
+        print(f'initializing: {index[n]}')
         while m < length:
             if m == n:
                 m+=1 #skip equivalent
@@ -43,13 +47,15 @@ def quality_filter(data, filter):
             else:
                 pass
             corr = stats.spearmanr(data[n], data[m])
+            print(f'{index[m]} corr: {abs(corr[0])}')
             if abs(corr[0]) > filter: #corr indicates colinearity
                 if index[m] in keep_val:
                     pass
                 else:
+                    print(f'removing: {index[m]}')
                     data = np.delete(data, m, 0)
-                    index = np.delete(index, m, None)
-                    length-=1
+                    index = np.delete(index, m, 0)
+                    length-=1; m-=1 #since removing shifts these
             else:
                 pass
             m+=1
@@ -251,7 +257,7 @@ def pinv_dropmin(trait_data, meth_data, thresh, find_meth=False,
         param find_meth: if True, intiaites additional multivariate regression for each remaining trait/probe combination, bool
         param polt_results: if True, plots results of data analysis, in accordance with other parameters, bool
         param to_filter_meth: optimizes methylation sites before usage in data analysis, bool
-        param meth_filter_thresh: threshhold of mean difference for dropping methylation sites, if val > param, drop
+        param meth_filter_thresh: threshold of mean difference for dropping methylation sites, if val > param, drop
 
         return: 3 dictionaries- if find_meth = False, keys = traits, vals = model predictions, actual, index,
                             else, keys = probes, vals = pvals+coefs, pvals, coefs 
