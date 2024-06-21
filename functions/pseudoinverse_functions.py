@@ -37,7 +37,7 @@ def quality_filter(data, filter):
     while n < length:
         m = 0
         print(f'initializing: {index[n]}')
-        while m < length:
+        while m < length+1:
             if m == n:
                 m+=1 #skip equivalent
                 if m >= length:
