@@ -32,12 +32,12 @@ def quality_filter(data, filter):
 
     keep_val = ['Rank', 'CD1 or C57BL6J?', 'C57BL6J or Sv129Ev?', 'M10_poststress_GLU'] #special case handling
 
-    length = len(data)-1
+    length = len(data)
     n = 0
     while n < length:
         m = 0
         print(f'initializing: {index[n]}')
-        while m < length+1:
+        while m < length:
             if m == n:
                 m+=1 #skip equivalent
                 if m >= length:
@@ -56,6 +56,8 @@ def quality_filter(data, filter):
                     data = np.delete(data, m, 0)
                     index = np.delete(index, m, 0)
                     length-=1; m-=1 #since removing shifts these
+                    if length == n:
+                        break
             else:
                 pass
             m+=1
