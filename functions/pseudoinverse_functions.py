@@ -30,34 +30,33 @@ def quality_filter(data, filter):
     index = data.index
     data = data.values #decreases runtime
 
-    keep_val = ['Rank', 'CD1 or C57BL6J?', 'C57BL6J or Sv129Ev?', 'M10_poststress_GLU'] #special case handling
+    keep_val = ['Rank', 'CD1 or C57BL6J?', 'C57BL6J or Sv129Ev?'] #special case handling
 
-    length = len(data)
     n = 0
-    while n < length:
+    while n < len(data):
         m = 0
-        print(f'initializing: {index[n]}')
-        while m < length:
+        print(f'\ninitializing: {index[n]}\n')
+        while m < len(data):
             if m == n:
                 m+=1 #skip equivalent
-                if m >= length:
+                if m >= len(data):
                     break
                 else:
                     pass
-            else:
-                pass
             corr = stats.spearmanr(data[n], data[m])
             print(f'{index[m]} corr: {abs(corr[0])}')
             if abs(corr[0]) > filter: #corr indicates colinearity
                 if index[m] in keep_val:
                     pass
                 else:
-                    print(f'removing: {index[m]}')
+                    print(f'\nremoving: {index[m]}\n')
                     data = np.delete(data, m, 0)
                     index = np.delete(index, m, 0)
-                    length-=1; m-=1 #since removing shifts these
-                    if length == n:
+                    m-=1 #since removing shifts this
+                    if n == len(data)-1: #if removing the selected index puts n to the max value, we need to shift n
+                        n-=1
                         break
+
             else:
                 pass
             m+=1
