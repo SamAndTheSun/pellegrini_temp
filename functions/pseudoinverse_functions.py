@@ -37,30 +37,30 @@ def quality_filter(data, filter):
         m = 0
         print(f'\ninitializing: {index[n]}\n')
         while m < len(data):
-            if m == n:
+            last = False #see True decleration
+            if m == n: #if both selectors are on the same trait
                 m+=1 #skip equivalent
-                if m >= len(data):
+                if m >= len(data): #if doing so leads to surpassing the data, break the loop
                     break
                 else:
                     pass
-            corr = stats.spearmanr(data[n], data[m])
+            corr = stats.spearmanr(data[n], data[m]) #find similarity between two traits
             print(f'{index[m]} corr: {abs(corr[0])}')
-            if abs(corr[0]) > filter: #corr indicates colinearity
-                if index[m] in keep_val:
-                    pass
-                else:
+            if abs(corr[0]) > filter: #if colinearity is high
+                if index[m] not in keep_val: #if not dealing with a special case
                     print(f'\nremoving: {index[m]}\n')
-                    data = np.delete(data, m, 0)
-                    index = np.delete(index, m, 0)
-                    m-=1 #since removing shifts this
-                    if n == len(data)-1: #if removing the selected index puts n to the max value, we need to shift n
-                        n-=1
-                        break
-
-            else:
-                pass
+                    data = np.delete(data, m, 0) #remove where m is selected from data
+                    index = np.delete(index, m, 0) #shifts m=4, for instance to being equivalent to what was previously m=5
+                    if n >= len(data)-1: #if last iteration, n needs to be shifted aswell to account for deletion
+                        n-=1   
+                    m-=1 #because m will be increased by 1 at the end of the loop
             m+=1
         n+=1
+
+    '''
+    note that the last trait won't be initialized, here that is CD1 or C57BL6J?,
+    but that isn't an issue because every trait has already been compared to it
+    '''
 
     data = pd.DataFrame(data) 
     data = data.set_index(index)
