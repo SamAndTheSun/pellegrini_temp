@@ -25,7 +25,27 @@ def quality_filter(data, filter):
         return: filtered data, df
     '''
 
-    data = data[::-1]
+    #sort data so that later entries are prioritized, since methylation data was collected at M17
+    rank_sort = []
+    for column in data.index:
+        if 'M12_poststress_' in column: rank_sort.append(0)
+        elif 'M10_poststress_' in column: rank_sort.append(1)
+        elif 'M8_poststress_' in column: rank_sort.append(2)
+        elif 'M6_poststress_' in column: rank_sort.append(3)
+        elif 'M4_poststress_' in column: rank_sort.append(4)
+        elif 'M2_poststress_' in column: rank_sort.append(5)
+        elif 'w4_poststress_' in column: rank_sort.append(6)
+        elif 'w2_poststress_' in column: rank_sort.append(7)
+        elif 'w4_stress_' in column: rank_sort.append(8)
+        elif 'w3_stress_' in column: rank_sort.append(9)
+        elif 'w2_stress_' in column: rank_sort.append(10)
+        elif 'w1_stress_' in column: rank_sort.append(11)
+        elif 'Baseline_' in column: rank_sort.append(12)
+        else: rank_sort.append(13)
+
+    data['rank_sort'] = rank_sort
+    data = data.sort_values(by='rank_sort')
+    data = data.drop(columns='rank_sort')
 
     index = data.index
     data = data.values #decreases runtime
