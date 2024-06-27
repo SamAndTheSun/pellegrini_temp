@@ -168,22 +168,20 @@ def get_cistrome(probe_data, fig_w=2800, fig_h=3000, check_pval=True, top_10k=Fa
         if (('_pval' in str(column)) or (check_pval==False)):
 
             #prep data for analysis
-            probe_data = probe_data.sort_values(by=column)
-            if top_10k:
-                bed_data = pd.DataFrame(
-                    {'chr_mm10': probe_data['chr_mm10'][0:9999],
-                    'pos_mm10': probe_data['pos_mm10'][0:9999],
-                    'end_mm10': (probe_data['pos_mm10']+2)[0:9999]
-                    }
-                )
-            else:
-                bed_data = pd.DataFrame(
-                    {'chr_mm10': probe_data['chr_mm10'][0:999],
-                    'pos_mm10': probe_data['pos_mm10'][0:999],
-                    'end_mm10': (probe_data['pos_mm10']+2)[0:999]
-                    }
-                )
-            bed_data = bed_data.dropna()
+            bed_data = probe_data[[column,'chr_mm10', 'pos_mm10']] #get desired trait and position information
+            bed_data = bed_data[bed_data[column].notna()] #keep defined values
+            bed_data = bed_data.sort_values(by=column) #sort for desired order
+
+            if top_10k: bed_data = bed_data.head(10000) #top 10k
+            else: bed_data = bed_data.head(1000) #top 1k
+
+            #put this into actual bed format
+            bed_data['end_mm10'] = bed_data['pos_mm10']+2
+            bed_data = bed_data.drop(columns=[column])
+
+            if bed_data.empty:
+                print(f'No valid probes, skipping trait {column}')
+                continue
 
             #create target file
             bed_data.to_csv('temp.txt', sep='\t', index=False, header=False)
@@ -373,7 +371,7 @@ def insig_nan(data):
     '''
     for column in data.columns: 
         if '_pval' in column:
-            data[column] = np.where(data[column] > 0.01, np.nan, data[column])
+            data[column] = np.where(data[column] >= 0.01, np.nan, data[column])
         else:
             pass
 
