@@ -43,35 +43,36 @@ def quality_filter(data, filter):
         elif 'Baseline_' in column: rank_sort.append(12)
         else: rank_sort.append(13)
 
-    data['rank_sort'] = rank_sort
-    data = data.sort_values(by='rank_sort')
-    data = data.drop(columns='rank_sort')
+    df = data.copy()
 
-    index = data.index
-    data = data.values #decreases runtime
+    df['rank_sort'] = rank_sort
+    df = df.sort_values(by='rank_sort')
+    df = df.drop(columns='rank_sort')
+
+    index = df.index
+    df = df.values #decreases runtime
 
     keep_val = ['Rank', 'CD1 or C57BL6J?', 'C57BL6J or Sv129Ev?'] #special case handling
 
     n = 0
-    while n < len(data):
+    while n < len(df):
         m = 0
         print(f'\ninitializing: {index[n]}\n')
-        while m < len(data):
-            last = False #see True decleration
+        while m < len(df):
             if m == n: #if both selectors are on the same trait
                 m+=1 #skip equivalent
-                if m >= len(data): #if doing so leads to surpassing the data, break the loop
+                if m >= len(df): #if doing so leads to surpassing the df, break the loop
                     break
                 else:
                     pass
-            corr = stats.spearmanr(data[n], data[m]) #find similarity between two traits
+            corr = stats.spearmanr(df[n], df[m]) #find similarity between two traits
             print(f'{index[m]} corr: {abs(corr[0])}')
             if abs(corr[0]) > filter: #if colinearity is high
                 if index[m] not in keep_val: #if not dealing with a special case
                     print(f'\nremoving: {index[m]}\n')
-                    data = np.delete(data, m, 0) #remove where m is selected from data
+                    df = np.delete(df, m, 0) #remove where m is selected from df
                     index = np.delete(index, m, 0) #shifts m=4, for instance to being equivalent to what was previously m=5
-                    if n >= len(data)-1: #if last iteration, n needs to be shifted aswell to account for deletion
+                    if n >= len(df)-1: #if last iteration, n needs to be shifted aswell to account for deletion
                         n-=1   
                     m-=1 #because m will be increased by 1 at the end of the loop
             m+=1
@@ -82,10 +83,10 @@ def quality_filter(data, filter):
     but that isn't an issue because every trait has already been compared to it
     '''
 
-    data = pd.DataFrame(data) 
-    data = data.set_index(index)
+    df = pd.DataFrame(df) 
+    df = df.set_index(index)
 
-    return data
+    return df
 
 def corr_scatter(pred, actual):
     '''
@@ -309,7 +310,7 @@ def pinv_dropmin(trait_data, meth_data, thresh, find_meth=False,
                 pass
             n+=1
 
-        try: #Forcefully keep Rank
+        try: #forcefully keep Rank
             to_drop.remove('Rank')
         except ValueError:
             pass
@@ -321,6 +322,7 @@ def pinv_dropmin(trait_data, meth_data, thresh, find_meth=False,
             loop_exit = True
         else:
             pass
+
     if find_meth: #find probes for remaining traits
         trait_pvals, trait_coefs = meth_calc(trait_data, meth_data)
 
@@ -332,17 +334,14 @@ def pinv_dropmin(trait_data, meth_data, thresh, find_meth=False,
             trait_vals[f'{column}_pval'] = trait_pvals[column]
             trait_vals[f'{column}_coef'] = trait_coefs[column]
 
-        if plot_results:
-            probe_heatmap(trait_pvals)
-            return trait_vals, trait_pvals, trait_coefs
-        else:
-            pass
+        if plot_results: probe_heatmap(trait_pvals)
+
         return trait_vals, trait_pvals, trait_coefs
+    
     elif plot_results:
             corr_scatter(pred, actual)
-            return pred, actual, index
-    else:
-        return pred, actual, index
+
+    return pred, actual, index
 
 def filter_meth(trait_data, meth_data, thresh=0.5):
     '''
