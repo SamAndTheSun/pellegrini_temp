@@ -13,6 +13,7 @@ from selenium.webdriver.support.ui import WebDriverWait, Select
 
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 import os
 import requests
@@ -152,13 +153,27 @@ def get_cistrome(probe_data, fig_w=2800, fig_h=3000, check_pval=True, top_10k=Fa
     #leaves browser open, useful for troubleshooting, turn off headless for this to work
     #options.add_experimental_option('detach', True)
 
-    options.add_argument('--ignore-ssl-errors=yes') #ignore insecure warning
-    options.add_argument('--ignore-certificate-errors')
-    options.add_argument("--headless") #makes it so that the browser doesn't open, Cistrome is grumpy so this is necesary
+   ###options.add_argument('--ignore-ssl-errors=yes') #ignore insecure warning
+   ###options.add_argument('--ignore-certificate-errors')
+   ###options.add_argument("--headless") #makes it so that the browser doesn't open, Cistrome is grumpy so this is necesary
 
-    #establish driver
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),
-                              options=options)
+    ############
+
+    #chrome options
+    options = Options()
+    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+    options.add_argument("--headless")  # Optional: Use if you want headless mode
+    options.add_argument("--incognito")  # Optional: Use if you want incognito mode
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+
+    #establish webdriver
+    driver = webdriver.Chrome(service=Service(), options=options)
+
+    #avoid detection by web security
+    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+
+    ############
 
     #iterate through data and produce graphs
     images = []
@@ -237,10 +252,14 @@ def get_cistrome(probe_data, fig_w=2800, fig_h=3000, check_pval=True, top_10k=Fa
             response = requests.get(png_url)
 
             #save image to working directory
+            question_mark = False
             if check_pval:
                 file_name = f'{column[:-5]}_temp_img.png'
             else:
                 file_name = f'{column}_temp_img.png'
+            if '?' in file_name:
+                file_name = file_name.replace('?', 'xYZabC')
+                question_mark = True
             try:
                 with open(file_name, 'wb') as file:
                     file.write(response.content)
@@ -249,12 +268,15 @@ def get_cistrome(probe_data, fig_w=2800, fig_h=3000, check_pval=True, top_10k=Fa
                     file_name = file_name.replace('/', '_')
                     with open(file_name, 'wb') as file:
                         file.write(response.content)
+
                 else:
                     print('Error: illegal character in trait name, modify exception accordingly')
                     pass
             path = os.path.join(os.getcwd(), file_name)
         
             images.append(path)
+
+            if question_mark: file_name = file_name.replace('xYZabC', '?') #if there is a question mark
             labels.append(file_name[:-13])
 
             n_traits+=1
@@ -323,15 +345,20 @@ def get_pos(probe_data, ref_data, drop_undef=True):
         chr = bed_data.loc['chr']
         pos = bed_data.loc['start']
 
-        chr_mm39.append(chr)
-        pos_mm39.append(int(pos))
-
-        try:
-            chr_mm10.append(converter[chr][pos][0][0])
-            pos_mm10.append(int(converter[chr][pos][0][1]))
-        except (IndexError, KeyError): #IndexError: No conversion, KeyError: Initial file gives nan
+        if (chr == 'nan') or (pos == 'nan'):
             chr_mm10.append(np.nan)
             pos_mm10.append(np.nan)
+
+        else:
+            chr_mm39.append(chr)
+            pos_mm39.append(int(pos))
+
+            try:
+                chr_mm10.append(converter[chr][pos][0][0])
+                pos_mm10.append(int(converter[chr][pos][0][1]))
+            except (IndexError, KeyError, TypeError): #IndexError: No conversion, KeyError/TypeError: Initial file gives nan
+                chr_mm10.append(np.nan)
+                pos_mm10.append(np.nan)
 
         n+=1
 
