@@ -53,7 +53,7 @@ def time_to_death_grouped(data, category):
     print('\n')
     return grouped_data
 
-def cross_validation(X_all, y_all, epochs, batch_size, n_iterations):
+def cross_validation(X_all, y_all, epochs, batch_size, n_iterations, gen_map=False):
     '''
     runs cross validation to determine loss of neural network model
 
@@ -70,8 +70,9 @@ def cross_validation(X_all, y_all, epochs, batch_size, n_iterations):
     all_actual = []
     all_losses = []
 
-    progress_bar = IntProgress(min=0, max=n_iterations, description=f'Training')
-    display(progress_bar)
+    if not gen_map: 
+      progress_bar = IntProgress(min=0, max=n_iterations, description=f'Training')
+      display(progress_bar)
 
     n = 0
     while n < n_iterations:
@@ -93,29 +94,50 @@ def cross_validation(X_all, y_all, epochs, batch_size, n_iterations):
         y_train = pd.concat([y_train_1, y_train_2], axis=0, ignore_index=True)
 
         model = train_nn(X_train, y_train, epochs, batch_size, bar=False)
-        losses, approx, actual = test_nn(model, X_val, y_val)
-
-        for a in approx:
-            if a == None:
-                break
-            else:
-                all_approx.append(a)
         
-        for a in actual:
-            if a == None:
-                break
-            else:
-                all_actual.append(a)
+        if gen_map:
 
-        for l in losses:
-            if l == None:
-                break
-            else:
-                all_losses.append(l)
+          progress_bar = IntProgress(min=0, max=X_val.shape[0], description=f'Generating Saliency Map')
+          display(progress_bar)
+           
+          all_maps = []
+          for _, sample in X_val.iterrows():
 
-        n+=1
+            saliency_map = generate_saliency_map(model, sample)
+            all_maps.append(saliency_map)
 
-        progress_bar.value = n
+            progress_bar.value+=1
+            
+          all_maps = np.mean(all_maps, axis=0)
+          saliency_map = saliency_map.flatten()
+
+          return saliency_map #since we only want to have a single test set
+        
+        else:
+        
+          losses, approx, actual = test_nn(model, X_val, y_val)
+
+          for a in approx:
+              if a == None:
+                  break
+              else:
+                  all_approx.append(a)
+
+          for a in actual:
+              if a == None:
+                  break
+              else:
+                  all_actual.append(a)
+
+          for l in losses:
+              if l == None:
+                  break
+              else:
+                  all_losses.append(l)
+
+          n+=1
+
+          progress_bar.value = n
 
     return all_approx, all_actual, all_losses
 
@@ -258,6 +280,20 @@ def generate_nn_pred(model, X):
 
   return outputs
 
+def generate_saliency_map(model, X):
+  model.eval()
+
+  X = X.values
+  X = torch.tensor(X, dtype=torch.float32, requires_grad=True)
+
+  output = model(X)
+  output.backward()
+
+  saliency_map = X.grad
+  saliency_map = saliency_map.detach().numpy()
+
+  return saliency_map
+
 class AutoEncoder(nn.Module):
   def __init__(self, n_inputs=9, h1=6, out_features=3):
     super().__init__()
@@ -283,6 +319,7 @@ class AutoEncoder(nn.Module):
     x = self.encode(x)
     x = self.decode(x)
     return x
+  
   
 def train_ae(X_train, h1=6, out_features=3, batch_size=64, epochs=80):
   n_inputs = X_train.shape[1]
