@@ -141,7 +141,10 @@ def get_cistrome(probe_data, fig_w=2800, fig_h=3000, check_pval=True, top_10k=Fa
         param fig_w: figure width for cistrome subplots, int
         param fig_h: figure height for cistrome subplots, int
         check_pval: if the code should check for columns with '_pval' to determine how to rank probes,
-            ranking with the lowest pval being moved to the top, etc., bool
+            ranking with the lowest pval being moved to the top, etc., bool. In the context of the code,
+            it is assumed that check_pval will ALWAYS be True unless working with a single, pre-pruned dataset that you don't want a title for.
+            Because of this if you take the "check_pval" param at face value its poorly named, but this code isn't
+            intended to be a pipeline so I haven't changed it. 
         top_10k: if the code should utilize the top 10k probes from the dataset, or use the default 1k, bool
 
         return: none
@@ -162,8 +165,8 @@ def get_cistrome(probe_data, fig_w=2800, fig_h=3000, check_pval=True, top_10k=Fa
     #chrome options
     options = Options()
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-    options.add_argument("--headless")  # Optional: Use if you want headless mode
-    options.add_argument("--incognito")  # Optional: Use if you want incognito mode
+    options.add_argument("--headless")  
+    options.add_argument("--incognito")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
 
@@ -183,7 +186,11 @@ def get_cistrome(probe_data, fig_w=2800, fig_h=3000, check_pval=True, top_10k=Fa
         if (('_pval' in str(column)) or (check_pval==False)):
 
             #prep data for analysis
-            bed_data = probe_data[[column,'chr_mm10', 'pos_mm10']] #get desired trait and position information
+            if check_pval:
+                bed_data = probe_data[[column,'chr_mm10', 'pos_mm10']]
+            else: #if check_pval is false, then column is an unwanted duplicate
+                bed_data = probe_data[['chr_mm10', 'pos_mm10']]
+            
             bed_data = bed_data[bed_data[column].notna()] #keep defined values
             bed_data = bed_data.sort_values(by=column) #sort for desired order
 
@@ -192,7 +199,7 @@ def get_cistrome(probe_data, fig_w=2800, fig_h=3000, check_pval=True, top_10k=Fa
 
             #put this into actual bed format
             bed_data['end_mm10'] = bed_data['pos_mm10']+2
-            bed_data = bed_data.drop(columns=[column])
+            if check_pval: bed_data = bed_data.drop(columns=[column])
 
             if bed_data.empty:
                 print(f'No valid probes, skipping trait {column}')
@@ -300,7 +307,7 @@ def get_cistrome(probe_data, fig_w=2800, fig_h=3000, check_pval=True, top_10k=Fa
             plot = plt.imread(images[i])
             ax.imshow(plot, extent=[0, 1, 0, 1], aspect='auto')
             ax.axis('off')
-            ax.set_title(labels[i], size=20)
+            if check_pval: ax.set_title(labels[i], size=20)
         except IndexError:
             fig.delaxes(ax)
             pass

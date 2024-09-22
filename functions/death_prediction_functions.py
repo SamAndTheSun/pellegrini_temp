@@ -162,7 +162,7 @@ def train_nn(X_train, y_train, batch_size, epochs, bar=False):
   X_train = torch.tensor(X_train, dtype=torch.float32)
   y_train = torch.tensor(y_train, dtype=torch.float32).view(-1, 1)
 
-  criterion = nn.SmoothL1Loss()
+  criterion = nn.L1Loss()
   dataset = TensorDataset(X_train, y_train)
   dataloader = DataLoader(dataset, batch_size=batch_size)
     
@@ -237,7 +237,7 @@ def test_nn(model, X_val, y_val):
   y_val = torch.tensor(y_val, dtype=torch.float32).view(-1, 1)
 
   dataset = TensorDataset(X_val, y_val)
-  criterion = nn.SmoothL1Loss()
+  criterion = nn.L1Loss()
   dataloader = DataLoader(dataset)
 
   approx = []
