@@ -8,6 +8,7 @@ import numpy as np
 from ipywidgets import IntProgress
 from IPython.display import display
 
+
 '''
 Functions utilized in the death prediction model
 '''
@@ -53,7 +54,7 @@ def time_to_death_grouped(data, category):
     print('\n')
     return grouped_data
 
-def cross_validation(X_all, y_all, epochs, batch_size, n_iterations, gen_map=False):
+def cross_validation(X_all, y_all, epochs, batch_size, n_iterations, scramble_trait=False):
     '''
     runs cross validation to determine loss of neural network model
 
@@ -66,13 +67,14 @@ def cross_validation(X_all, y_all, epochs, batch_size, n_iterations, gen_map=Fal
       return: 3 lists containing all of the models predictions, the actual values, and the loss values
     '''
 
-    all_approx = []
-    all_actual = []
-    all_losses = []
+    if scramble_trait: trait_loss = {}
+    else:
+      all_approx = []
+      all_actual = []
+      all_losses = []
 
-    if not gen_map: 
-      progress_bar = IntProgress(min=0, max=n_iterations, description=f'Training')
-      display(progress_bar)
+    progress_bar = IntProgress(min=0, max=n_iterations, description=f'Training')
+    display(progress_bar)
 
     n = 0
     while n < n_iterations:
@@ -94,52 +96,66 @@ def cross_validation(X_all, y_all, epochs, batch_size, n_iterations, gen_map=Fal
         y_train = pd.concat([y_train_1, y_train_2], axis=0, ignore_index=True)
 
         model = train_nn(X_train, y_train, epochs, batch_size, bar=False)
-        
-        if gen_map:
 
-          progress_bar = IntProgress(min=0, max=X_val.shape[0], description=f'Generating Saliency Map')
-          display(progress_bar)
-           
-          all_maps = []
-          for _, sample in X_val.iterrows():
+        if scramble_trait: # scramble traits to determine their significance in the model
+          
+          status = 'with_time'
+          while True:
+            for column in X_val.columns:
 
-            saliency_map = generate_saliency_map(model, sample)
-            all_maps.append(saliency_map)
+              if status == 'with_time': 
+                 working_data = X_val.copy()
+              else: 
+                 working_data = X_val.copy()
+                 working_data['time_point_in_study_weeks'] = np.random.normal(loc=0, scale=1, size=X_val.shape[0])
+                 if column == 'time_point_in_study_weeks': continue
 
-            progress_bar.value+=1
-            
-          all_maps = np.mean(all_maps, axis=0)
-          saliency_map = saliency_map.flatten()
+              # shuffle the target columns
+              if column == 'C57BL6J or Sv129Ev': continue
+              elif column == 'CD1 or C57BL6J':
+                  # apply noise to both strain columns
+                  working_data['CD1 or C57BL6J'] = np.random.normal(loc=0, scale=1, size=X_val.shape[0])
+                  working_data['C57BL6J or Sv129Ev'] = np.random.normal(loc=0, scale=1, size=X_val.shape[0])
+                  column = 'Strain'
+              else:
+                 working_data[column] = np.random.normal(loc=0, scale=1, size=X_val.shape[0])
 
-          return saliency_map #since we only want to have a single test set
-        
+              # get the losses and add them to a trait/iteration specific dictionary
+              losses, _, _ = test_nn(model, working_data, y_val)
+
+              if column not in trait_loss:
+                trait_loss[f'{column}_{status}'] = losses
+              else:
+                trait_loss[f'{column}_{status}'] = trait_loss[f'{column}_{status}'].extend(losses)
+
+              # tell the loop to remove timepoint from now on, of if its already being removed to break out of the loop
+            if status != 'no_time': status = 'no_time'
+            else: break
+          
         else:
-        
           losses, approx, actual = test_nn(model, X_val, y_val)
 
           for a in approx:
-              if a == None:
-                  break
-              else:
-                  all_approx.append(a)
-
+              if a == None: break
+              else: all_approx.append(a)
           for a in actual:
-              if a == None:
-                  break
-              else:
-                  all_actual.append(a)
-
+              if a == None: break
+              else: all_actual.append(a)
           for l in losses:
-              if l == None:
-                  break
-              else:
-                  all_losses.append(l)
+              if l == None: break
+              else: all_losses.append(l)
+        n+=1
+        progress_bar.value = n
 
-          n+=1
+    if scramble_trait:
 
-          progress_bar.value = n
-
-    return all_approx, all_actual, all_losses
+      # average by trait
+      for key in trait_loss:
+         trait_loss[key] = np.mean(trait_loss[key])
+      return trait_loss
+    
+    else: 
+       return all_approx, all_actual, all_losses
 
 def train_nn(X_train, y_train, batch_size, epochs, bar=False):
   '''
@@ -248,15 +264,15 @@ def test_nn(model, X_val, y_val):
 
     outputs = model(inputs)
     loss = criterion(outputs, targets)
-    losses.append(float(loss.detach().numpy()))
+    losses.append(float(loss.cpu().item()))
 
-    pred = outputs.detach().numpy()[0]
+    pred = outputs.cpu().item()
     pred = str(pred)
-    approx.append(pred[1:-1])
+    approx.append(pred)
 
-    act = targets.detach().numpy()[0]
+    act = targets.cpu().item()
     act = str(act)
-    actual.append(act[1:-1])
+    actual.append(act)
 
   return losses, approx, actual
 
@@ -280,108 +296,6 @@ def generate_nn_pred(model, X):
 
   return outputs
 
-def generate_saliency_map(model, X):
-  model.eval()
-
-  X = X.values
-  X = torch.tensor(X, dtype=torch.float32, requires_grad=True)
-
-  output = model(X)
-  output.backward()
-
-  saliency_map = X.grad
-  saliency_map = saliency_map.detach().numpy()
-
-  return saliency_map
-
-class AutoEncoder(nn.Module):
-  def __init__(self, n_inputs=9, h1=6, out_features=3):
-    super().__init__()
-    #encoding functions
-    self.fc1 = nn.Linear(n_inputs, h1)
-    self.out = nn.Linear(h1, out_features)
-
-    #decoding functions
-    self.out_r = nn.Linear(out_features, h1)
-    self.fc1_r = nn.Linear(h1, n_inputs)
-
-  def encode(self, x):
-    x = F.relu(self.fc1(x)) #takes the input then modifies it
-    x = self.out(x) #gives the output prediction
-    return x
-
-  def decode(self, x):
-    x = F.relu(self.out_r(x)) #takes the output then modifies it
-    x = self.fc1_r(x) #gives the input prediction
-    return x
-
-  def forward(self, x):
-    x = self.encode(x)
-    x = self.decode(x)
-    return x
-  
-  
-def train_ae(X_train, h1=6, out_features=3, batch_size=64, epochs=80):
-  n_inputs = X_train.shape[1]
-
-  try: X_train = X_train.values
-  except: pass
-
-  #add noise to X_train so the model learns to detect noise
-  noise = np.random.normal(1, 0.3, X_train.shape) 
-  noisy_X_train = X_train + noise
-
-  X_train = torch.tensor(X_train, dtype=torch.float32)
-  noisy_X_train = X_train.clone().detach()
-
-  criterion = nn.MSELoss()
-  dataset = TensorDataset(noisy_X_train, X_train)
-  dataloader = DataLoader(dataset, batch_size=batch_size)
-
-  model = AutoEncoder(n_inputs, h1=6, out_features=3)
-  model.train()
-  optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
-  best_loss = 100
-  for i in range(epochs):
-    for inputs, targets in dataloader:
-
-      outputs = model(inputs)
-      loss = criterion(outputs, targets)
-
-      optimizer.zero_grad()
-      loss.backward()
-      optimizer.step()
-
-    if i % 10 == 0:
-      print(f'Epoch: {i} and loss: {loss}')
-
-    if loss < best_loss:
-      best_loss = loss
-      best_model = copy.deepcopy(model)
-
-  #now, utilize the trained model to predict the values
-      
-  return best_model
-
-def test_ae(model, X_test):
-
-  try: X_test = X_test.values
-  except: pass
-
-  X_test = torch.tensor(X_test, dtype=torch.float32)
-  model.eval()
-
-  dataset = TensorDataset(X_test, X_test)
-  dataloader = DataLoader(dataset)
-
-  denoised_data = []
-
-  with torch.no_grad():
-      for inputs, temp in dataloader:
-          outputs = model(inputs)
-          denoised_data.append(outputs.squeeze().detach().numpy())
-
-  denoised_data = torch.tensor(np.stack(denoised_data, axis=1), dtype=torch.float32)
-
-  return denoised_data
+def get_param_sig(model, X_val, y_val):
+   return
+   
