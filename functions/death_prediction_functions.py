@@ -126,7 +126,7 @@ def cross_validation(X_all, y_all, epochs, batch_size, n_iterations, scramble_tr
               if column not in trait_loss:
                 trait_loss[f'{column}_{status}'] = losses
               else:
-                trait_loss[f'{column}_{status}'] = trait_loss[f'{column}_{status}'].extend(losses)
+                trait_loss[f'{column}_{status}'].extend(losses)
 
               # tell the loop to remove timepoint from now on, of if its already being removed to break out of the loop
             if status != 'no_time': status = 'no_time'
